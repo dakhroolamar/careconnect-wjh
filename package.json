@@ -1,0 +1,27 @@
+{
+  "name": "careconnect-pilot",
+  "private": true,
+  "version": "0.3.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --strictPort",
+    "build": "vite build",
+    "test": "node --test src/model.test.js server/api.test.js",
+    "start": "node server/start.js",
+    "deploy": "wrangler deploy",
+    "test:cloudflare": "wrangler deploy --dry-run --outdir .wrangler/bundle && node --test cloudflare/worker.test.js"
+  },
+  "dependencies": {
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "miniflare": "^5.20261006.0-alpha",
+    "vite": "^6.0.0",
+    "wrangler": "^4.148.0"
+  },
+  "overrides": {
+    "sharp": "0.35.5"
+  }
+}

@@ -1,0 +1,10 @@
+{
+ "name":"careconnect-wjh",
+ "main":"cloudflare/worker.js",
+ "compatibility_date":"2026-10-08",
+ "compatibility_flags":["nodejs_compat"],
+ "assets":{"directory":"./dist","binding":"ASSETS","not_found_handling":"single-page-application","run_worker_first":["/api/*"]},
+ "durable_objects":{"bindings":[{"name":"PILOT_DB","class_name":"PilotDatabase"}]},
+ "migrations":[{"tag":"v1","new_sqlite_classes":["PilotDatabase"]}],
+ "observability":{"enabled":false}
+}
