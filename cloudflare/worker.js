@@ -1,7 +1,7 @@
 import {DurableObject} from 'cloudflare:workers';
 import {createApiCore} from '../server/api-core.js';
 
-// One serialized district pilot database; preserves the existing SQL and policies.
+// One serialized care database; preserves the existing SQL and policies.
 export class PilotDatabase extends DurableObject {
  constructor(ctx,env){
   super(ctx,env);
@@ -16,7 +16,7 @@ export class PilotDatabase extends DurableObject {
    transaction:fn=>ctx.storage.transactionSync(fn),
    close:()=>{},
   };
-  this.api=createApiCore({db,secureCookies:true});
+  this.api=createApiCore({db,secureCookies:true,seedData:env.SEED_TEST_DATA==='true'});
  }
  async fetch(request){
   const headers=Object.fromEntries(request.headers);

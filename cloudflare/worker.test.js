@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Miniflare,convertV4MiniflareOptions} from 'miniflare';
 test('Cloudflare SQLite runtime supports secure login, scoped care, closure and persistent restart',async t=>{
- const options={modules:true,scriptPath:'.wrangler/bundle/worker.js',compatibilityDate:'2026-10-08',compatibilityFlags:['nodejs_compat'],durableObjects:{PILOT_DB:{className:'PilotDatabase',useSQLite:true}},durableObjectsPersist:`.pilot/worker-test-${crypto.randomUUID()}`,serviceBindings:{ASSETS:()=>new Response('assets')}};
+ const options={modules:true,bindings:{SEED_TEST_DATA:'true'},scriptPath:'.wrangler/bundle/worker.js',compatibilityDate:'2026-10-08',compatibilityFlags:['nodejs_compat'],durableObjects:{PILOT_DB:{className:'PilotDatabase',useSQLite:true}},durableObjectsPersist:`.pilot/worker-test-${crypto.randomUUID()}`,serviceBindings:{ASSETS:()=>new Response('assets')}};
  const runtimeOptions={...convertV4MiniflareOptions(options),resourcePersistencePath:options.durableObjectsPersist};let mf=new Miniflare(runtimeOptions);t.after(()=>mf.dispose());
  const request=async(path,body,cookie)=>mf.dispatchFetch('https://pilot.test/api'+path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json',...(cookie?{Cookie:cookie}:{})},body:body?JSON.stringify(body):undefined});
  assert.equal((await request('/workspace')).status,401);

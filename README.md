@@ -1,8 +1,6 @@
-# CareConnect â€” West Jaintia Hills facility pilot v0.3
+# CareConnect — facility care tracking across districts
 
-Online fictional-data pilot: https://careconnect.dakhroo.workers.dev/
-
-Hosted on Workers Free with SQLite-backed Durable Objects. No custom domain or paid subscription is required. Free quotas can stop service; they do not automatically upgrade the plan. Keep the account on Workers Free to avoid usage billing.
+Facilities enroll with their state / union territory, district, location, level and services. New installations start empty. Preloaded directory entries in existing installations are archived without deleting patient or audit history. New facility and patient IDs use CC prefixes. Enrollment requires registration approval; individual facility patient scope is preserved across districts. Verified administrator onboarding is still required before clinical use.
 
 ## Run locally
 

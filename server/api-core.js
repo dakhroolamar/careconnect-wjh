@@ -17,7 +17,7 @@ function text(value,label,max=2000){if(typeof value!=='string'||!value.trim()||v
 function date(value,label){const d=new Date(value);if(!Number.isFinite(d.getTime()))fail(400,`${label} must be a valid date.`);return d.toISOString();}
 function list(value,label){if(!Array.isArray(value)||value.length>40)fail(400,`${label} must be a list of at most 40 entries.`);return [...new Set(value.map(v=>text(v,label,120)))];}
 
-export function createApiCore({db,clock=()=>Date.now(),secureCookies=false}){
+export function createApiCore({db,clock=()=>Date.now(),secureCookies=false,seedData=false}){
  db.exec(`CREATE TABLE IF NOT EXISTS facilities(id TEXT PRIMARY KEY,data TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY,facility_id TEXT NOT NULL,email TEXT NOT NULL,password TEXT NOT NULL,name TEXT NOT NULL,role TEXT NOT NULL,UNIQUE(facility_id,email));
  CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user_id TEXT NOT NULL,expires INTEGER NOT NULL);
@@ -28,11 +28,11 @@ export function createApiCore({db,clock=()=>Date.now(),secureCookies=false}){
  const putFacility=f=>db.prepare('INSERT OR REPLACE INTO facilities(id,data) VALUES(?,?)').run(f.id,JSON.stringify(f));
  const getPatient=id=>{const row=db.prepare('SELECT data FROM patients WHERE id=?').get(id);return row?JSON.parse(row.data):null;};
  const putPatient=p=>db.prepare('INSERT OR REPLACE INTO patients(id,data) VALUES(?,?)').run(p.id,JSON.stringify(p));
- const allFacilities=()=>db.prepare('SELECT data FROM facilities').all().map(r=>JSON.parse(r.data));
+ const allFacilities=()=>db.prepare('SELECT data FROM facilities').all().map(r=>JSON.parse(r.data)).filter(f=>f.registration!=='Archived');
  const now=()=>new Date(clock()).toISOString();
  const audit=(user,action,patientId=null)=>db.prepare('INSERT INTO audit VALUES(?,?,?,?,?,?)').run(randomUUID(),now(),user.facility_id,user.id,action,patientId);
  function transaction(fn){if(db.transaction)return db.transaction(fn);db.exec('BEGIN IMMEDIATE');try{const result=fn();db.exec('COMMIT');return result;}catch(e){db.exec('ROLLBACK');throw e;}}
- if(!db.prepare('SELECT value FROM meta WHERE key=?').get('seed-v2'))transaction(()=>{
+ if(seedData&&!db.prepare('SELECT value FROM meta WHERE key=?').get('seed-v2'))transaction(()=>{
   for(const f of facilities)putFacility({...f,registration:'Unclaimed',services:[],specialists:[],accepting:'Unknown',contact:'',profileUpdated:null});
   for(const id of DEMO_IDS){const f=getFacility(id);putFacility({...f,registration:'Demo active',services:['Demo consultation','Demo assessment'],specialists:[{id:randomUUID(),name:'Demo duty clinician',specialty:'General medicine',status:'Available',schedule:'Demo roster only',until:new Date(clock()+24*3600000).toISOString()}],accepting:'Accepting',contact:'Demo contact — not a real number',profileUpdated:now()});db.prepare('INSERT INTO users VALUES(?,?,?,?,?,?)').run(randomUUID(),id,'staff@pilot.local',hashPassword(DEMO_PASSWORD),'Demo facility administrator','facility_admin');}
   db.prepare('INSERT INTO users VALUES(?,?,?,?,?,?)').run(randomUUID(),'WJH-ADMIN','admin@pilot.local',hashPassword(DEMO_PASSWORD),'Demo district administrator','district_admin');
@@ -40,11 +40,16 @@ export function createApiCore({db,clock=()=>Date.now(),secureCookies=false}){
   seed().forEach((p,i)=>putPatient({...p,registeredFacility:origins[i],referralFacilities:refs[i],version:1,tasks:p.tasks.map(t=>({...t,facility:p.facility})),events:p.events.map(e=>({...e,actorName:e.owner,actorFacility:e.facility}))}));
   db.prepare('INSERT INTO meta VALUES(?,?)').run('seed-v2','1');
  });
+ // Retire the old preloaded directory reversibly; retain records and audit history.
+ if(!seedData&&!db.prepare('SELECT value FROM meta WHERE key=?').get('district-neutral-v1'))transaction(()=>{
+  for(const f of allFacilities())if(['Unclaimed','Demo active'].includes(f.registration))putFacility({...f,registration:'Archived'});
+  db.prepare('INSERT INTO meta VALUES(?,?)').run('district-neutral-v1','1');
+ });
  const attempts=new Map();
  function throttle(key){const prior=attempts.get(key);const entry=prior&&prior.reset>clock()?prior:{count:0,reset:clock()+60000};entry.count++;attempts.set(key,entry);if(attempts.size>1000)for(const [k,v]of attempts)if(v.reset<clock())attempts.delete(k);if(entry.count>12)fail(429,'Too many attempts. Wait a minute and try again.');}
  function session(req){const token=(req.headers.cookie||'').split(';').map(v=>v.trim()).find(v=>v.startsWith('careconnect_session='))?.slice(20);if(!token)return null;const row=db.prepare('SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.expires>?').get(digest(token),clock());return row||null;}
  const publicUser=u=>({id:u.id,name:u.name,email:u.email,facilityId:u.facility_id,role:u.role});
- const requireUser=req=>{const u=session(req);if(!u)fail(401,'Sign in to your facility account.');if(u.role!=='district_admin'){const f=getFacility(u.facility_id);if(!['Active','Demo active'].includes(f?.registration))fail(403,'Your facility registration is awaiting district approval.');}return u;};
+ const requireUser=req=>{const u=session(req);if(!u)fail(401,'Sign in to your facility account.');if(u.role!=='district_admin'){const f=getFacility(u.facility_id);if(!['Active','Demo active'].includes(f?.registration))fail(403,'Your facility registration is awaiting registration approval.');}return u;};
  function viewable(u,id){const p=getPatient(id);if(!p||u.role==='district_admin'||!canView(p,u.facility_id))fail(404,'Patient record not available to this facility.');return p;}
  function emit(res,status,body){res.statusCode=status;res.setHeader('Content-Type','application/json');res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.end(JSON.stringify(body));}
  async function read(req){let data='';for await(const chunk of req){data+=chunk;if(data.length>65536)fail(413,'Request is too large.');}try{return data?JSON.parse(data):{};}catch{fail(400,'Invalid JSON.');}}
@@ -56,36 +61,36 @@ export function createApiCore({db,clock=()=>Date.now(),secureCookies=false}){
     if(!String(req.headers['content-type']||'').startsWith('application/json'))fail(415,'Use JSON requests.');
     const origin=req.headers.origin;if(origin&&new URL(origin).host!==req.headers.host)fail(403,'Cross-origin request rejected.');
    }
-   if(pathname==='/api/bootstrap'&&req.method==='GET'){const u=session(req);const choices=allFacilities().map(({id,name,type,block,registration})=>({id,name,type,block,registration}));return emit(res,200,{user:u?publicUser(u):null,choices,demos:DEMO_IDS.map(id=>({id,name:getFacility(id).name})),demoEmail:'staff@pilot.local',demoPassword:DEMO_PASSWORD});}
+   if(pathname==='/api/bootstrap'&&req.method==='GET'){const u=session(req);const choices=allFacilities().map(({id,name,type,block,state,district,registration})=>({id,name,type,block,state,district,registration}));return emit(res,200,{user:u&&(u.role==='district_admin'||['Active','Demo active'].includes(getFacility(u.facility_id)?.registration))?publicUser(u):null,choices,enrollmentOpen:true});}
    const body=req.method==='GET'?{}:await read(req);
    if(pathname==='/api/login'&&req.method==='POST'){
     throttle(`login:${req.socket.remoteAddress}`);const fid=text(body.facilityId,'Facility ID',100),email=text(body.email,'Email',160).toLowerCase(),password=text(body.password,'Password',200);
     const u=db.prepare('SELECT * FROM users WHERE facility_id=? AND email=?').get(fid,email);
     if(!u||!checkPassword(password,u.password))fail(401,'Facility ID, staff email or password is incorrect.');
-    if(u.role!=='district_admin'&&!['Active','Demo active'].includes(getFacility(fid)?.registration))fail(403,'Registration submitted. District approval is required before sign in.');
+    if(u.role!=='district_admin'&&!['Active','Demo active'].includes(getFacility(fid)?.registration))fail(403,'Registration submitted. Registration approval is required before sign in.');
     const token=randomBytes(32).toString('hex');db.prepare('INSERT INTO sessions VALUES(?,?,?)').run(digest(token),u.id,clock()+8*3600000);res.setHeader('Set-Cookie',`careconnect_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800${secureCookies?"; Secure":""}`);audit(u,'Signed in');return emit(res,200,{user:publicUser(u)});
    }
    if(pathname==='/api/register-facility'&&req.method==='POST'){
     throttle(`registration:${req.socket.remoteAddress}`);const email=text(body.email,'Administrator email',160).toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))fail(400,'Enter a valid administrator email.');const password=text(body.password,'Password',200);if(password.length<12)fail(400,'Use a password of at least 12 characters.');
     const name=text(body.adminName,'Administrator name',100);const services=list(body.services,'Services');if(!services.length)fail(400,'Add at least one service.');const contact=text(body.contact,'Facility contact',160);
-    let f;if(body.directoryId){f=getFacility(text(body.directoryId,'Directory facility',100));if(!f||f.registration!=='Unclaimed')fail(409,'This facility is already registered or awaiting approval.');}else{const type=text(body.type,'Facility level',10);if(!['SC','PHC','CHC','DH','MC','SD'].includes(type))fail(400,'Invalid facility level.');f={id:`WJH-${type}-${randomBytes(4).toString('hex').toUpperCase()}`,name:text(body.name,'Facility name',120),type,block:text(body.block,'Block / location',100),source:null,external:false};}
-    transaction(()=>{putFacility({...f,registration:'Pending approval',services,contact,specialists:[],accepting:'Unknown',profileUpdated:now()});db.prepare('INSERT INTO users VALUES(?,?,?,?,?,?)').run(randomUUID(),f.id,email,hashPassword(password),name,'facility_admin');});return emit(res,201,{facilityId:f.id,message:'Registration received. A district administrator must approve this facility before access is enabled.'});
+    let f;if(body.directoryId){f=getFacility(text(body.directoryId,'Directory facility',100));if(!f||f.registration!=='Unclaimed')fail(409,'This facility is already registered or awaiting approval.');}else{const type=text(body.type,'Facility level',10);if(!['SC','PHC','CHC','DH','MC','SD'].includes(type))fail(400,'Invalid facility level.');f={id:`CC-${type}-${randomBytes(4).toString('hex').toUpperCase()}`,name:text(body.name,'Facility name',120),type,block:text(body.block,'Block / location',100),state:text(body.state,'State / union territory',100),district:text(body.district,'District',100),source:null,external:false};}
+    transaction(()=>{putFacility({...f,registration:'Pending approval',services,contact,specialists:[],accepting:'Unknown',profileUpdated:now()});db.prepare('INSERT INTO users VALUES(?,?,?,?,?,?)').run(randomUUID(),f.id,email,hashPassword(password),name,'facility_admin');});return emit(res,201,{facilityId:f.id,message:'Registration received. A registration administrator must approve this facility before access is enabled.'});
    }
    if(pathname==='/api/logout'&&req.method==='POST'){const token=(req.headers.cookie||'').split(';').map(v=>v.trim()).find(v=>v.startsWith('careconnect_session='))?.slice(20);if(token)db.prepare('DELETE FROM sessions WHERE token=?').run(digest(token));res.setHeader('Set-Cookie','careconnect_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0'+(secureCookies?'; Secure':''));return emit(res,200,{ok:true});}
    const u=requireUser(req);
    if(pathname==='/api/workspace'&&req.method==='GET'){const patients=u.role==='district_admin'?[]:db.prepare('SELECT data FROM patients').all().map(r=>JSON.parse(r.data)).filter(p=>canView(p,u.facility_id));return emit(res,200,{user:publicUser(u),facilities:allFacilities(),patients,audit:db.prepare('SELECT at,action,patient_id AS patientId FROM audit WHERE facility_id=? ORDER BY at DESC LIMIT 100').all(u.facility_id)});}
-   if(pathname==='/api/export'&&req.method==='GET'){if(u.role==='district_admin')fail(403,'District approval accounts cannot export patients.');const patients=db.prepare('SELECT data FROM patients').all().map(r=>JSON.parse(r.data)).filter(p=>canView(p,u.facility_id));audit(u,'Exported facility-scoped demo records');return emit(res,200,{exportedAt:now(),facilityId:u.facility_id,patients});}
+   if(pathname==='/api/export'&&req.method==='GET'){if(u.role==='district_admin')fail(403,'Registration approval accounts cannot export patients.');const patients=db.prepare('SELECT data FROM patients').all().map(r=>JSON.parse(r.data)).filter(p=>canView(p,u.facility_id));audit(u,'Exported facility-scoped records');return emit(res,200,{exportedAt:now(),facilityId:u.facility_id,patients});}
    if(pathname==='/api/profile'&&req.method==='PUT'){
     if(u.role!=='facility_admin')fail(403,'Only facility administrators can edit this profile.');const f=getFacility(u.facility_id);const services=list(body.services,'Services');if(!Array.isArray(body.specialists)||body.specialists.length>30)fail(400,'At most 30 specialists are supported.');
     const specialists=body.specialists.map(s=>{const state=text(s.status,'Specialist availability',40);if(!['Available','On call','Unavailable'].includes(state))fail(400,'Invalid specialist availability.');return {id:s.id||randomUUID(),name:text(s.name,'Clinician name',100),specialty:text(s.specialty,'Specialty',100),status:state,schedule:text(s.schedule,'Schedule / hours',200),until:date(s.until,'Availability valid until')};});
     if(!['Accepting','Limited','Not accepting','Unknown'].includes(body.accepting))fail(400,'Invalid referral acceptance.');const contact=text(body.contact,'Contact',160);transaction(()=>{putFacility({...f,services,specialists,contact,accepting:body.accepting,profileUpdated:now()});audit(u,'Updated services and specialist roster');});return emit(res,200,{ok:true});
    }
    if(pathname==='/api/approve-facility'&&req.method==='POST'){
-    if(u.role!=='district_admin')fail(403,'District approval account required.');const f=getFacility(body.facilityId);if(!f||f.registration!=='Pending approval')fail(409,'No pending registration for this facility.');transaction(()=>{putFacility({...f,registration:'Active',approvedAt:now(),approvedBy:u.id});audit(u,`Approved facility ${f.id}`);});return emit(res,200,{ok:true});
+    if(u.role!=='district_admin')fail(403,'Registration approval account required.');const f=getFacility(body.facilityId);if(!f||f.registration!=='Pending approval')fail(409,'No pending registration for this facility.');transaction(()=>{putFacility({...f,registration:'Active',approvedAt:now(),approvedBy:u.id});audit(u,`Approved facility ${f.id}`);});return emit(res,200,{ok:true});
    }
    if(pathname==='/api/patients'&&req.method==='POST'){
     if(u.role==='district_admin')fail(403,'Choose a facility account to register a patient.');const name=text(body.name,'Patient name',100),owner=text(body.owner,'Responsible clinician',100);const age=Number(body.age);if(!Number.isInteger(age)||age<0||age>120)fail(400,'Age must be between 0 and 120.');if(!['Maternal care','General care','Child health'].includes(body.category))fail(400,'Invalid care category.');
-    const at=now();const p={id:`WJH-DEMO-${randomBytes(6).toString('hex').toUpperCase()}`,name,age,category:body.category,owner,registeredFacility:u.facility_id,referralFacilities:[],facility:u.facility_id,updated:at,version:1,urgency:'Routine',plan:'Care plan pending.',tasks:[],transfer:null,events:[{id:randomUUID(),at,title:'Registered',facility:u.facility_id,owner,actorName:u.name,actorFacility:u.facility_id,note:'Registered at the signed-in facility.'}]};transaction(()=>{putPatient(p);audit(u,'Registered patient',p.id);});return emit(res,201,{patient:p});
+    const at=now();const p={id:`CC-${randomBytes(6).toString('hex').toUpperCase()}`,name,age,category:body.category,owner,registeredFacility:u.facility_id,referralFacilities:[],facility:u.facility_id,updated:at,version:1,urgency:'Routine',plan:'Care plan pending.',tasks:[],transfer:null,events:[{id:randomUUID(),at,title:'Registered',facility:u.facility_id,owner,actorName:u.name,actorFacility:u.facility_id,note:'Registered at the signed-in facility.'}]};transaction(()=>{putPatient(p);audit(u,'Registered patient',p.id);});return emit(res,201,{patient:p});
    }
    const match=pathname.match(/^\/api\/patients\/([^/]+)(?:\/actions)?$/);
    if(match){let p=viewable(u,decodeURIComponent(match[1]));if(req.method==='GET')return emit(res,200,{patient:p});if(req.method!=='POST'||!pathname.endsWith('/actions'))fail(405,'Method not allowed.');if(body.version!==p.version)fail(409,'This record changed. Refresh before saving again.');
