@@ -1,5 +1,5 @@
 {
- "name":"careconnect-wjh",
+ "name":"careconnect",
  "main":"cloudflare/worker.js",
  "workers_dev":true,
  "preview_urls":false,
@@ -10,3 +10,4 @@
  "migrations":[{"tag":"v1","new_sqlite_classes":["PilotDatabase"]}],
  "observability":{"enabled":false}
 }
+

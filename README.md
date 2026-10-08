@@ -1,6 +1,6 @@
 # CareConnect — West Jaintia Hills facility pilot v0.3
 
-Online fictional-data pilot: https://careconnect-wjh.dakhroo.workers.dev/
+Online fictional-data pilot: https://careconnect.dakhroo.workers.dev/
 
 Hosted on Workers Free with SQLite-backed Durable Objects. No custom domain or paid subscription is required. Free quotas can stop service; they do not automatically upgrade the plan. Keep the account on Workers Free to avoid usage billing.
 
@@ -12,7 +12,7 @@ SQLite persistence lives at `.pilot/careconnect.sqlite`, ignored by Git. This re
 
 ## Facility sign in
 
-Choose a demo facility on the sign-in page to fill its credentials, then click Sign in.
+Enter a facility ID, staff email and password on the sign-in page. The public credential shortcuts have been removed.
 
 Facility IDs: `Nartiang-PHC`, `Ummulong-CHC`, `Rakabah-SC`, `Jowai-DH`, `Jarain-PHC`.
 
@@ -83,5 +83,6 @@ Workers Builds configuration: repository root `.`, build command `npm run build`
 Validation: `npm test` and `npm run build`, followed by `npm run test:cloudflare` for the actual Worker runtime, scope, closure and persistence across a restart. Local Node development remains available with `npm run dev`.
 
 This public demo has intentionally published demo logins and a simulated district approval account. Do not enter real patient information. A private GitHub repository does not make the deployed demo private. Before clinical use, replace demo accounts with verified individual staff accounts and complete protected deployment, privacy, backup, operations and clinical governance work.
+
 
 
