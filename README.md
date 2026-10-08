@@ -1,4 +1,4 @@
-# CareConnect — West Jaintia Hills facility pilot v0.2
+# CareConnect — West Jaintia Hills facility pilot v0.3
 
 ## Run locally
 
@@ -16,13 +16,13 @@ Email: `staff@pilot.local`. Local demonstration password: `DemoPilot!2026`.
 
 District registration approval account: facility ID `WJH-ADMIN`, email `admin@pilot.local`, same demonstration password. This account manages facility registrations and has **no patient access**.
 
-These deliberately public demo credentials must never be deployed publicly. The server binds to loopback. Real deployment needs unique staff identities, removal of seeded accounts and credential discovery, HTTPS, secure cookies, account recovery, verified administrator onboarding, and stronger abuse protections.
+These deliberately public demo credentials are for a fictional-data demonstration only. The local server binds to loopback; Cloudflare hosts a separate online demo. Clinical deployment needs unique staff identities, removal of seeded accounts and credential discovery, HTTPS, secure cookies, account recovery, verified administrator onboarding, and stronger abuse protections.
 
 ## Facility registration and profiles
 
 Register an unclaimed published facility or create a new facility record. Existing facilities retain their directory ID; new facilities receive a generated unique ID. Add services, contact, administrator name, email and a password of at least 12 characters. Registration requires district approval before sign-in or receiving referrals. Facility registration cannot claim a facility already registered or pending approval.
 
-After local approval, sign in and use My facility to maintain services, referral acceptance and specialists: clinician name, specialty, availability, schedule and validity expiry. The directory and referral form show these reported details, including when they were updated. Expired specialist availability is marked as expired. No staffing, appointment, bed or service capability is asserted as verified.
+After pilot approval, sign in and use My facility to maintain services, referral acceptance and specialists: clinician name, specialty, availability, schedule and validity expiry. The directory and referral form show these reported details, including when they were updated. Expired specialist availability is marked as expired. No staffing, appointment, bed or service capability is asserted as verified.
 
 ## Patient access rules
 
@@ -57,7 +57,7 @@ Sources checked 7 October 2026. Verify current facility classification, contacts
 
 ## Remaining work before clinical deployment
 
-This remains a local synthetic-data pilot. No external notification delivery, ABDM integration, verified facility identity, encrypted database, backups, high availability, ambulance integration or tamper-resistant audit service is implemented. The database administrator can modify records directly.
+This remains a synthetic-data pilot. No external notification delivery, ABDM integration, verified facility identity, encrypted database, backups, high availability, ambulance integration or tamper-resistant audit service is implemented. The database administrator can modify records directly.
 
 Next recommended improvements: individually provisioned clinician/nurse/administrator accounts and permissions; verified facility onboarding; patient duplicate detection within authorized scope; returned/declined referral workflows; structured discharge summaries; dependable escalation delivery; verified capacity and transport status; consent/access retention policies; encrypted protected deployment, backup recovery and privacy/security review. Clinical escalation thresholds need local approval and testing, not app-invented medical rules.
 
@@ -79,3 +79,4 @@ Workers Builds configuration: repository root `.`, build command `npm run build`
 Validation: `npm test` and `npm run build`, followed by `npm run test:cloudflare` for the actual Worker runtime, scope, closure and persistence across a restart. Local Node development remains available with `npm run dev`.
 
 This public demo has intentionally published demo logins and a simulated district approval account. Do not enter real patient information. A private GitHub repository does not make the deployed demo private. Before clinical use, replace demo accounts with verified individual staff accounts and complete protected deployment, privacy, backup, operations and clinical governance work.
+
