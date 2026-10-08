@@ -1,4 +1,4 @@
-# CareConnect — facility care tracking across districts
+# CareConnect - facility care tracking across districts
 
 Facilities enroll with their state / union territory, district, location, level and services. New installations start empty. Preloaded directory entries in existing installations are archived without deleting patient or audit history. New facility and patient IDs use CC prefixes. Enrollment requires registration approval; individual facility patient scope is preserved across districts. Verified administrator onboarding is still required before clinical use.
 
@@ -12,19 +12,11 @@ SQLite persistence lives at `.pilot/careconnect.sqlite`, ignored by Git. This re
 
 Enter a facility ID, staff email and password on the sign-in page. The public credential shortcuts have been removed.
 
-Facility IDs: `Nartiang-PHC`, `Ummulong-CHC`, `Rakabah-SC`, `Jowai-DH`, `Jarain-PHC`.
-
-Email: `staff@pilot.local`. Local demonstration password: `DemoPilot!2026`.
-
-District registration approval account: facility ID `WJH-ADMIN`, email `admin@pilot.local`, same demonstration password. This account manages facility registrations and has **no patient access**.
-
-These deliberately public demo credentials are for a fictional-data demonstration only. The local server binds to loopback; Cloudflare hosts a separate online demo. Clinical deployment needs unique staff identities, removal of seeded accounts and credential discovery, HTTPS, secure cookies, account recovery, verified administrator onboarding, and stronger abuse protections.
+New facilities start through Register a facility. Preloaded facility accounts are archived. The existing approval account remains available for continuity. Verified administrator onboarding and replacement of shared credentials are required before clinical use.
 
 ## Facility registration and profiles
 
-Register an unclaimed published facility or create a new facility record. Existing facilities retain their directory ID; new facilities receive a generated unique ID. Add services, contact, administrator name, email and a password of at least 12 characters. Registration requires district approval before sign-in or receiving referrals. Facility registration cannot claim a facility already registered or pending approval.
-
-After pilot approval, sign in and use My facility to maintain services, referral acceptance and specialists: clinician name, specialty, availability, schedule and validity expiry. The directory and referral form show these reported details, including when they were updated. Expired specialist availability is marked as expired. No staffing, appointment, bed or service capability is asserted as verified.
+Enter state / union territory, district, facility name, facility level, block / location, services, contact and administrator details. The server assigns a CC facility ID. Registration requires approval before sign-in or referrals. After approval, My facility maintains services, referral acceptance and specialist availability. New installations start with no enrolled facilities.
 
 ## Patient access rules
 
